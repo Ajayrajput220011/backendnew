@@ -30,6 +30,10 @@ const pool = new Pool({
   database: process.env.DB_NAME,
   password: process.env.DB_PASSWORD,
   port: process.env.DB_PORT,
+  ssl: {
+    require: true,               // ✅ Required for Render
+    rejectUnauthorized: false,   // ✅ Prevents SSL self-signed rejection
+  },
 });
 
 pool.connect()
