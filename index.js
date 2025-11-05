@@ -25,23 +25,25 @@ app.use(bodyParser.json());
 // PostgreSQL Connection
 // ---------------------------
 const pool = new Pool({
-  user: process.env.DB_USER,
-  host: process.env.DB_HOST,
-  database: process.env.DB_NAME,
-  password: process.env.DB_PASSWORD,
-  port: process.env.DB_PORT,
+  connectionString: process.env.DATABASE_URL,
   ssl: {
-    require: true,               // ✅ Render requires SSL
-    rejectUnauthorized: false,   // ✅ Ignore self-signed cert
+    require: true,
+    rejectUnauthorized: false,
   },
-  keepAlive: true,               // ✅ Prevents idle disconnects
-  connectionTimeoutMillis: 10000 // ✅ 10s timeout to avoid hanging
+  keepAlive: true,
+  connectionTimeoutMillis: 10000,
 });
 
-pool.connect()
-  .then(() => console.log("✅ Connected to PostgreSQL"))
-  .catch((err) => console.error("❌ PostgreSQL connection error:", err));
-
+// Test database connection
+(async () => {
+  try {
+    const client = await pool.connect();
+    console.log("✅ Connected to PostgreSQL successfully!");
+    client.release();
+  } catch (err) {
+    console.error("❌ PostgreSQL connection error:", err.message);
+  }
+})();
 // ---------------------------
 // Razorpay Setup
 // ---------------------------
