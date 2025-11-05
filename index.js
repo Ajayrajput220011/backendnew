@@ -31,9 +31,11 @@ const pool = new Pool({
   password: process.env.DB_PASSWORD,
   port: process.env.DB_PORT,
   ssl: {
-    require: true,               // ✅ Required for Render
-    rejectUnauthorized: false,   // ✅ Prevents SSL self-signed rejection
+    require: true,               // ✅ Render requires SSL
+    rejectUnauthorized: false,   // ✅ Ignore self-signed cert
   },
+  keepAlive: true,               // ✅ Prevents idle disconnects
+  connectionTimeoutMillis: 10000 // ✅ 10s timeout to avoid hanging
 });
 
 pool.connect()
