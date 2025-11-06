@@ -215,49 +215,90 @@ app.delete("/api/users1/:id", async (req, res) => {
 
 // OTP Send + Verify
 // ---------------------------
+
 const otpStore = {};
+
+// ✅ Email transporter (Gmail)
 const transporter = nodemailer.createTransport({
   service: "gmail",
-  auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS },
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS,
+  },
 });
 
-function generateOtp() {
-  return Math.floor(100000 + Math.random() * 900000).toString();
-}
+// ✅ Generate 6-digit OTP
+const generateOtp = () =>
+  Math.floor(100000 + Math.random() * 900000).toString();
 
+// ✅ Send OTP
 app.post("/send-otp", async (req, res) => {
   const { toEmail } = req.body;
-  if (!toEmail) return res.status(400).json({ message: "Email required" });
+  if (!toEmail)
+    return res.status(400).json({ success: false, message: "Email required" });
 
   const otp = generateOtp();
-  otpStore[toEmail] = otp;
-
-  const mailOptions = {
-    from: process.env.EMAIL_USER,
-    to: toEmail,
-    subject: "Your OTP Code",
-    text: `Your OTP code is ${otp}`,
-  };
+  otpStore[toEmail] = { otp, verified: false };
 
   try {
-    await transporter.sendMail(mailOptions);
+    await transporter.sendMail({
+      from: process.env.EMAIL_USER,
+      to: toEmail,
+      subject: "Password Reset OTP",
+      text: `Your OTP for password reset is ${otp}. It will expire in 5 minutes.`,
+    });
+
+    console.log(`✅ OTP sent to ${toEmail}: ${otp}`);
     res.json({ success: true, message: "OTP sent successfully" });
+
+    // Expire OTP after 5 minutes
+    setTimeout(() => delete otpStore[toEmail], 5 * 60 * 1000);
   } catch (err) {
-    res.status(500).json({ success: false, message: "Email failed", error: err.message });
+    console.error("❌ Error sending email:", err);
+    res.status(500).json({ success: false, message: "Failed to send OTP" });
   }
 });
 
+// ✅ Verify OTP
 app.post("/verify-otp", (req, res) => {
   const { email, otp } = req.body;
-  if (!email || !otp)
-    return res.status(400).json({ message: "Email and OTP required" });
+  const storedOtp = otpStore[email]?.otp;
 
-  if (otpStore[email] === otp) {
-    delete otpStore[email];
+  if (storedOtp && storedOtp === otp) {
+    otpStore[email].verified = true;
     return res.json({ success: true, message: "OTP verified" });
+  } else {
+    return res.json({ success: false, message: "Invalid or expired OTP" });
   }
-  res.status(400).json({ success: false, message: "Invalid OTP" });
 });
+
+// ✅ Change Password — only verified email can change
+app.post("/change-password", async (req, res) => {
+  const { email, password } = req.body;
+  const userOtp = otpStore[email];
+
+  if (!userOtp || !userOtp.verified) {
+    return res
+      .status(401)
+      .json({ success: false, message: "OTP not verified or expired" });
+  }
+
+  const hashedPassword = await bcrypt.hash(password, 10);
+
+  const sql = "UPDATE users SET password = ? WHERE email = ?";
+  db.query(sql, [hashedPassword, email], (err, result) => {
+    if (err) {
+      console.error("❌ Password update error:", err);
+      return res
+        .status(500)
+        .json({ success: false, message: "Database update failed" });
+    }
+
+    delete otpStore[email];
+    res.json({ success: true, message: "Password updated successfully" });
+  });
+});
+
 
 
 app.post("/api/signup", async (req, res) => {
